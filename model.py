@@ -1,61 +1,73 @@
-import torch
-from transformers import BertTokenizer, BertModel
+from lightgbm import LGBMClassifier
+from matplotlib import pyplot as plt
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-from pythainlp.tokenize import word_tokenize
-from pythainlp.corpus import thai_stopwords
+import pandas as pd
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.neural_network import MLPClassifier
+from NLP import NeuroLinguisticProgramming
+from Vectorizer import Vectorizer
+class Model: 
+    def __init__(self, x_train_pkl, x_test_pkl, y_train_pkl, y_test_pkl):
+        self.x_train = x_train_pkl
+        self.x_test = x_test_pkl
+        self.y_train = y_train_pkl
+        self.y_test = y_test_pkl
 
-# โหลดข้อมูล
-def load_data(filename): 
-    with open(filename, 'r', encoding='utf-8') as file:
-        return [line.strip() for line in file.readlines()]
+    def LightGBM_BERT(self):
+        self.model = LGBMClassifier(
+                n_estimators=2500,
+                learning_rate=0.008,
+                num_leaves=700,
+                colsample_bytree=0.8,
+                subsample=0.7,
+                reg_alpha=0.2,
+                reg_lambda=0.6,
+                min_data_in_leaf=15,
+                scale_pos_weight=1.6,  # ลดลง
+                class_weight='balanced',  # ให้โมเดลบาลานซ์เอง
+                boosting_type='gbdt',
+                max_bin=255,
+                force_col_wise=True,
+                random_state=42,
+                n_jobs=-1
+            )
 
-# ตัดคำ และลบคำที่ไม่จำเป็น
-def preprocess_text(data_list): 
-    final = "".join(data for data in data_list)
-    final = word_tokenize(final, keep_whitespace=False)
-    final = " ".join(word for word in final if word not in ('"\'', '"‘', '\'"', '[', ']', '!"', '!!', "'",'\u200b', '|', '+', '#', '‘', '’', '...', '..', "ๆ", "“", "”", "?", ".", ";", ":", "!", '"', "(", ")", ",", "«", "»", "—", "-", "–", "…", "№", " ", "\n", "\t", "\r", "\ufeff", ">", "<", 'ฯ','.', '/'))
-    final = " ".join(word for word in final.split() if word not in thai_stopwords())
-    return final
+        self.model.fit(self.x_train, self.y_train) 
+        self.y_pred = self.model.predict(self.x_test)
 
-# โหลดข้อความจริงและปลอม
-true_news = load_data('true_news.txt')
-fake_news = load_data('fake_news.txt')
+    def Classification_Report(self): 
+        self.accuracy = accuracy_score(self.y_test, self.y_pred)
+        print(f'ความแม่นยำ : {self.accuracy * 100:.2f}')
 
-list_true_news = [preprocess_text(data) for data in true_news]
-list_fake_news = [preprocess_text(data) for data in fake_news]
+        self.classification = classification_report(self.y_test, self.y_pred)
+        print(self.classification)
 
-# เตรียมข้อมูล
-sentences = list_true_news + list_fake_news
-labels = [0] * len(list_true_news) + [1] * len(list_fake_news)  # 0 = ข่าวจริง, 1 = ข่าวปลอม
+    def Sentence(self, data_list):
+        data_list = NLP.Lemmatization(data_list)
+        data_list = NLP.Remove_Special_character(data_list)
+        data_list = NLP.Tokenization(data_list)
+        data_list = NLP.Stopwords(data_list)
+        data_list = NLP.Lowercase(data_list)
 
-# แบ่งข้อมูล train-test
-x_train, x_test, y_train, y_test = train_test_split(sentences, labels, test_size=0.25, random_state=42)
+        sentence_vectorizer = vectorizer.encode_sentences(data_list)
+        sentence_pred = self.model.predict(sentence_vectorizer)
+        sentence_accuracy = max(self.model.predict_proba(sentence_vectorizer)[0])
 
-# โหลด BERT Tokenizer และ BERT Model
-tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased')
-bert_model = BertModel.from_pretrained('bert-base-multilingual-cased')
+        if (sentence_pred[0] == 1): 
+            print(f'ผลลัพธ์การทำนาย : ข่าวจริง | ความมั่นใจ : {sentence_accuracy * 100:.2f}\n')
+        else: 
+            print(f'ผลลัพธ์การทำนาย : ข่าวปลอม | ความมั่นใจ : {sentence_accuracy * 100:.2f}\n')
 
-# ฟังก์ชันแปลงข้อความเป็นเวกเตอร์ด้วย BERT
-def get_bert_embedding(texts, tokenizer, model, max_length=128):
-    inputs = tokenizer(texts, padding=True, truncation=True, max_length=max_length, return_tensors="pt")
-    with torch.no_grad():
-        outputs = model(**inputs)
-    return outputs.last_hidden_state[:, 0, :].numpy()  # ใช้เวกเตอร์จาก [CLS] token
+NLP = NeuroLinguisticProgramming()
+vectorizer = Vectorizer()
+x_train_pkl, x_test_pkl, y_train_pkl, y_test_pkl = vectorizer.Load_Vectorizer()
 
-# แปลงข้อความเป็นเวกเตอร์
-x_train_vectors = get_bert_embedding(x_train, tokenizer, bert_model)
-x_test_vectors = get_bert_embedding(x_test, tokenizer, bert_model)
+model = Model(x_train_pkl, x_test_pkl, y_train_pkl, y_test_pkl)
+model.LightGBM_BERT()
+model.Classification_Report()
 
-# Train Random Forest Classifier
-rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-rf_model.fit(x_train_vectors, y_train)
+while True: 
+    sentence = str(input('Enter Sentence : '))
 
-# ทำนายผล
-y_pred = rf_model.predict(x_test_vectors)
-
-# ประเมินผล
-accuracy = accuracy_score(y_test, y_pred)
-print(f'Accuracy: {accuracy:.4f}')
+    model.Sentence([sentence])

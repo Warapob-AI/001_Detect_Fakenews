@@ -4,7 +4,7 @@ from pythainlp.util import dict_trie
 import re
 
 class NeuroLinguisticProgramming: 
-    def load_data(self, filename): 
+    def Load_data(self, filename): 
         import codecs
 
         with codecs.open(filename, 'r', 'utf-8') as file: 
@@ -201,14 +201,14 @@ class NeuroLinguisticProgramming:
             r'ม\.': 'มาตรา',
 
             r'จ\.': 'จังหวัด',
+
+            r'บ\.': 'บริษัท',
         }
 
         for pattern, full_month in word_lemmatization.items():
             data_list = [re.sub(pattern, full_month, t) for t in data_list]
 
         return data_list
-    
-    
     
     def Remove_Number(self, data_list): 
         text_no_numbers = [re.sub(r'\d+', '', t) for t in data_list]
@@ -293,21 +293,10 @@ class NeuroLinguisticProgramming:
 
     def Lowercase(self, data_list):
         return [text.lower() for text in data_list]
-        
-NLP = NeuroLinguisticProgramming()
+    
+    def Array2D(self, data_list):
+        list_data = []
 
-list_fake_news = NLP.load_data('fake_news.txt')
-list_true_news = NLP.load_data('true_news.txt')
-
-start_row = 500 
-end_row = 520
-text = NLP.Lemmatization(list_true_news[start_row:end_row]) #แปลงคำย่อ
-text = NLP.Remove_Special_character(text) #ตัดอักขระพิเศษออก
-text = NLP.Tokenization(text) #การสับคำ
-# text = NLP.Stopwords(text) #การตัดคำที่ไม่สำคัญ
-text = NLP.Lowercase(text) #เปลี่ยนพิมพ์ใหญ่เป็นพิมพ์เล็ก
-
-count = start_row
-for data in text: 
-    print(f"{count}.) : {data}\n")
-    count += 1
+        for data in data_list: 
+            data_split = data.split()
+            list_data.append(data_split)
